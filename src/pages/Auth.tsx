@@ -1,37 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
-const nameSchema = z.string().min(1, 'Name is required');
+const nameSchema = z.string().min(1, 'Full name is required');
+const genderSchema = z.string().min(1, 'Please select a gender');
+
+const genderOptions = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'non-binary', label: 'Non-binary' },
+  { value: 'prefer-not-to-say', label: 'Prefer not to say' },
+];
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, loading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/');
+    }
+  }, [user, loading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // Validate inputs
       emailSchema.parse(email);
       passwordSchema.parse(password);
       if (!isLogin) {
-        nameSchema.parse(name);
+        nameSchema.parse(fullName);
+        genderSchema.parse(gender);
       }
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -51,6 +67,8 @@ export default function Auth() {
         let message = error.message;
         if (message.includes('Email not confirmed')) {
           message = 'Please confirm your email before signing in. Check your inbox.';
+        } else if (message.includes('Invalid login credentials')) {
+          message = 'Invalid email or password. Please try again.';
         }
         toast({
           title: 'Sign in failed',
@@ -61,15 +79,11 @@ export default function Auth() {
         navigate('/');
       }
     } else {
-      const { error } = await signUp(email, password, name);
+      const { error } = await signUp(email, password, fullName, gender);
       if (error) {
-        let message = error.message;
-        if (message.includes('already registered')) {
-          message = 'This email is already registered. Try signing in instead.';
-        }
         toast({
           title: 'Sign up failed',
-          description: message,
+          description: error.message,
           variant: 'destructive',
         });
       } else {
@@ -77,11 +91,23 @@ export default function Auth() {
           title: 'Check your email',
           description: 'We sent you a confirmation link. Please verify your email to continue.',
         });
+        setEmail('');
+        setPassword('');
+        setFullName('');
+        setGender('');
       }
     }
 
     setIsLoading(false);
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -99,17 +125,34 @@ export default function Auth() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Your full name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required={!isLogin}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gender">Gender</Label>
+                  <Select value={gender} onValueChange={setGender}>
+                    <SelectTrigger id="gender">
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {genderOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
