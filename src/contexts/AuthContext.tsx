@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface Profile {
   full_name: string;
   gender: string;
+  date_of_birth: string | null;
 }
 
 interface AuthContextType {
@@ -12,7 +13,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, gender: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, gender: string, dateOfBirth: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -28,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('full_name, gender')
+      .select('full_name, gender, date_of_birth')
       .eq('user_id', userId)
       .single();
 
@@ -69,16 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, gender: string) => {
+  const signUp = async (email: string, password: string, fullName: string, gender: string, dateOfBirth: string) => {
     // First check if user already exists by attempting to get user with this email
-    // We use a sign-in attempt to check - if it returns specific error about unconfirmed email
-    // or valid credentials, the user exists
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: 'check_existence_dummy_password_that_wont_work',
     });
 
-    // If we get "Email not confirmed" or actual credential error (not "Invalid login credentials" for non-existent user)
+    // If we get "Email not confirmed" the user exists
     if (signInError && signInError.message.includes('Email not confirmed')) {
       return { error: new Error('You already have an account. Please log in instead.') };
     }
@@ -94,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           full_name: fullName,
           gender: gender,
+          date_of_birth: dateOfBirth,
         }
       }
     });
@@ -114,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user_id: data.user.id,
         full_name: fullName,
         gender: gender,
+        date_of_birth: dateOfBirth,
       });
 
       if (profileError) {
